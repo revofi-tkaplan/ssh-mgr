@@ -1,0 +1,79 @@
+#!/bin/bash
+
+root=/home/$(whoami)/ssh-profiles
+parent_dir=/home/$(whoami)
+
+if [ ! -d "$root" ]; then
+	mkdir $root
+fi
+
+while [[ $# -gt 0 ]]
+do
+key=$1
+
+case $key in
+	-h|--help)
+	echo "SSH Manager Options"
+	echo "-ls or --list to list all profiles"
+	echo "-cr $profile_name or --create $profile_name to generate profile with rsa keygen"
+	echo "-c or --current prints the current loaded profile"
+	echo "-p (optional $profile_name) or --public to print current or chosen public key of profile"
+	echo "-s $profile_name or --set $profile_name to set the current ssh profile"
+	shift
+	;;
+	-ls|--list)
+	ls $root | cut -d ' ' -f 1 | grep ssh- | awk -F 'ssh-' '{print $2}'
+	shift
+	;;
+	-cr|--create)
+	profile="$2"
+	exists=$(ls ssh-profiles | cut -d ' ' -f 1 | grep ssh- | awk -F 'ssh-' '{print $2}' | xargs -I {} sh -c "if [[ \"{}\" = \"$profile\" ]]; then echo \"1\"; fi | grep \"1\"")
+	if [[ ! -z "$exists" ]]; then
+		echo "$profile already exists"
+		exit
+	fi
+	rm -rf .ssh
+	ssh-keygen -t rsa -N '' -f $parent_dir/.ssh/id_rsa	
+	cp -rf $parent_dir/.ssh $root/ssh-$profile
+	echo "$profile" > $root/current
+	shift
+	shift
+	;;
+	-c|--current)
+	cat $root/current
+	shift
+	;;
+	-p|--public)
+	profile="$2"	
+	shift
+	if [ -z "$profile" ]; then
+		cat $root/ssh-$(cat $root/current)/id_rsa.pub
+	else
+		cat $root/ssh-$profile/id_rsa.pub
+		shift
+	fi
+	;;
+	-s|--set)
+	profile="$2"
+	shift
+	shift
+	echo $profile > $root/current
+
+	if [ -d "$root/ssh-$profile" ]; then
+		cp -rf $parent_dir/.ssh $parent_dir/.ssh.bak.$(tr -dc 0-9 </dev/urandom | head -c 10)
+		rm -rf $parent_dir/.ssh
+		cp -rf $root/ssh-$profile $parent_dir/.ssh
+	else
+		echo "File does not exist"
+	fi
+	;;
+	*)
+	echo "SSH Manager Options"
+	echo "-ls or --list to list all profiles"
+	echo "-c $profile_name or --create $profile_name to generate profile with rsa keygen"
+	echo "-p (optional $profile_name) or --public to print current or chosen public key of profile"
+	echo "-s $profile_name or --set $profile_name to set the current ssh profile"
+	shift
+	;;
+esac
+done
